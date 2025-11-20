@@ -1,7 +1,13 @@
-#pip install psycopg2-binary
+# pip install psycopg2-binary python-dotenv
 
 import psycopg2
 from psycopg2 import DatabaseError, OperationalError
+import os
+from dotenv import load_dotenv
+from ai import inserir_medicao_com_analise_ia
+
+# Carrega variáveis do arquivo .env
+load_dotenv()
 
 # Para compatibilidade, usamos Exception genérico quando necessário
 Error = Exception
@@ -217,107 +223,107 @@ inserts = {
     'TAREFA': (
         """INSERT INTO tarefa (descricao, data_conclusao, data_agendada, id_funcionario) VALUES
         ('Verificar sistema de irrigação da Estufa A', '2024-11-10 14:30:00', '2024-11-10 08:00:00', 1),
-        ('Calibrar sensores de temperatura', NULL, '2024-11-16 09:00:00', 5),
+        ('Calibrar sensores de temperatura', NULL, '2025-11-21 09:00:00', 5),
         ('Colheita de alface na Estufa B', '2024-11-12 11:00:00', '2024-11-12 07:00:00', 3),
-        ('Inspeção geral das estufas', NULL, '2024-11-17 10:00:00', 2),
+        ('Inspeção geral das estufas', NULL, '2025-11-21 10:00:00', 2),
         ('Manutenção preventiva dos atuadores', '2024-11-14 16:00:00', '2024-11-14 13:00:00', 5),
-        ('Aplicação de fertilizante NPK na Estufa C', NULL, '2024-11-18 08:00:00', 1),
+        ('Aplicação de fertilizante NPK na Estufa C', NULL, '2025-11-22 08:00:00', 1),
         ('Limpeza dos filtros de ventilação', '2024-11-13 15:00:00', '2024-11-13 14:00:00', 5),
         ('Plantio de tomates na Estufa D', '2024-11-11 10:30:00', '2024-11-11 08:00:00', 3),
-        ('Verificação de pH do solo', NULL, '2024-11-19 09:00:00', 1),
+        ('Verificação de pH do solo', NULL, '2025-11-23 09:00:00', 1),
         ('Troca de lâmpadas LED', '2024-11-15 11:00:00', '2024-11-15 10:00:00', 5),
-        ('Monitoramento de pragas', NULL, '2024-11-20 08:00:00', 2),
+        ('Monitoramento de pragas', NULL, '2025-11-20 08:00:00', 2),
         ('Poda de plantas na Estufa A', '2024-11-14 13:00:00', '2024-11-14 09:00:00', 3),
-        ('Ajuste de sistemas de aquecimento', NULL, '2024-11-21 10:00:00', 5),
-        ('Colheita de pimentões na Estufa C', NULL, '2024-11-22 07:00:00', 3),
+        ('Ajuste de sistemas de aquecimento', NULL, '2025-11-21 10:00:00', 5),
+        ('Colheita de pimentões na Estufa C', NULL, '2025-11-22 07:00:00', 3),
         ('Análise de qualidade da água', '2024-11-13 16:00:00', '2024-11-13 14:00:00', 2)"""),
     'MEDICAO': (
         """INSERT INTO medicao (data_hora_registro, valor_medido, id_sensor) VALUES
-        ('2024-11-15 08:00:00', 22.5, 1),
-        ('2024-11-15 08:00:00', 75.3, 2),
-        ('2024-11-15 08:00:00', 21.8, 3),
-        ('2024-11-15 08:00:00', 78.2, 4),
-        ('2024-11-15 12:00:00', 26.3, 1),
-        ('2024-11-15 12:00:00', 68.5, 2),
-        ('2024-11-15 12:00:00', 25.1, 3),
-        ('2024-11-15 12:00:00', 72.0, 4),
-        ('2024-11-15 08:00:00', 6.8, 9),
-        ('2024-11-15 08:00:00', 6.5, 10),
-        ('2024-11-15 16:00:00', 24.8, 1),
-        ('2024-11-15 16:00:00', 71.2, 2),
-        ('2024-11-15 16:00:00', 23.5, 3),
-        ('2024-11-15 16:00:00', 74.8, 4),
-        ('2024-11-15 08:00:00', 850.5, 5),
-        ('2024-11-15 08:00:00', 920.3, 6),
-        ('2024-11-15 12:00:00', 1250.8, 5),
-        ('2024-11-15 12:00:00', 1380.2, 6),
-        ('2024-11-15 08:00:00', 20.5, 7),
-        ('2024-11-15 08:00:00', 80.2, 8),
-        ('2024-11-14 08:00:00', 21.8, 1),
-        ('2024-11-14 08:00:00', 76.5, 2),
-        ('2024-11-14 12:00:00', 25.2, 1),
-        ('2024-11-14 12:00:00', 70.3, 2),
-        ('2024-11-14 16:00:00', 23.9, 1),
-        ('2024-11-14 16:00:00', 73.1, 2),
-        ('2024-11-13 08:00:00', 22.1, 1),
-        ('2024-11-13 08:00:00', 77.8, 2),
-        ('2024-11-13 12:00:00', 26.5, 1),
-        ('2024-11-13 12:00:00', 67.2, 2)"""),
+        ('2025-11-15 08:00:00', 22.5, 1),
+        ('2025-11-15 08:00:00', 75.3, 2),
+        ('2025-11-15 08:00:00', 21.8, 3),
+        ('2025-11-15 08:00:00', 78.2, 4),
+        ('2025-11-15 12:00:00', 26.3, 1),
+        ('2025-11-15 12:00:00', 68.5, 2),
+        ('2025-11-15 12:00:00', 25.1, 3),
+        ('2025-11-15 12:00:00', 72.0, 4),
+        ('2025-11-15 08:00:00', 6.8, 9),
+        ('2025-11-15 08:00:00', 6.5, 10),
+        ('2025-11-15 16:00:00', 24.8, 1),
+        ('2025-11-15 16:00:00', 71.2, 2),
+        ('2025-11-15 16:00:00', 23.5, 3),
+        ('2025-11-15 16:00:00', 74.8, 4),
+        ('2025-11-15 08:00:00', 850.5, 5),
+        ('2025-11-15 08:00:00', 920.3, 6),
+        ('2025-11-15 12:00:00', 1250.8, 5),
+        ('2025-11-15 12:00:00', 1380.2, 6),
+        ('2025-11-15 08:00:00', 20.5, 7),
+        ('2025-11-15 08:00:00', 80.2, 8),
+        ('2025-11-14 08:00:00', 21.8, 1),
+        ('2025-11-14 08:00:00', 76.5, 2),
+        ('2025-11-14 12:00:00', 25.2, 1),
+        ('2025-11-14 12:00:00', 70.3, 2),
+        ('2025-11-14 16:00:00', 23.9, 1),
+        ('2025-11-14 16:00:00', 73.1, 2),
+        ('2025-11-13 08:00:00', 22.1, 1),
+        ('2025-11-13 08:00:00', 77.8, 2),
+        ('2025-11-13 12:00:00', 26.5, 1),
+        ('2025-11-13 12:00:00', 67.2, 2)"""),
     'ALERTA': (
         """INSERT INTO alerta (seriedade, mensagem, data_hora_alerta, id_medicao) VALUES
-        ('Média', 'Temperatura acima do ideal', '2024-11-15 12:05:00', 5),
-        ('Baixa', 'Umidade abaixo do recomendado', '2024-11-15 12:05:00', 6),
-        ('Alta', 'Temperatura crítica detectada', '2024-11-13 12:05:00', 29),
-        ('Média', 'Umidade fora da faixa ideal', '2024-11-13 12:05:00', 30),
-        ('Baixa', 'Luminosidade levemente baixa', '2024-11-15 08:05:00', 15),
-        ('Média', 'pH do solo necessita correção', '2024-11-15 08:05:00', 9)"""),
+        ('Média', 'Temperatura acima do ideal', '2025-11-15 12:05:00', 5),
+        ('Baixa', 'Umidade abaixo do recomendado', '2025-11-15 12:05:00', 6),
+        ('Alta', 'Temperatura crítica detectada', '2025-11-13 12:05:00', 29),
+        ('Média', 'Umidade fora da faixa ideal', '2025-11-13 12:05:00', 30),
+        ('Baixa', 'Luminosidade levemente baixa', '2025-11-15 08:05:00', 15),
+        ('Média', 'pH do solo necessita correção', '2025-11-15 08:05:00', 9)"""),
     'LOTE_PLANTIO': (
         """INSERT INTO lote_plantio (data_plantio, data_previsao_colheita, id_estufa, id_cultura) VALUES
-        ('2024-09-01', '2024-11-30', 1, 1),
-        ('2024-10-15', '2024-11-30', 2, 2),
-        ('2024-09-20', '2024-12-05', 1, 3),
-        ('2024-10-01', '2024-11-30', 2, 4),
-        ('2024-08-15', '2024-12-15', 4, 5),
-        ('2024-10-20', '2024-11-30', 3, 6),
-        ('2024-09-25', '2024-11-15', 2, 7),
-        ('2024-09-10', '2024-11-15', 4, 8),
-        ('2024-09-05', '2024-11-15', 3, 9),
-        ('2024-10-25', '2024-11-25', 1, 10)"""),
+        ('2025-09-01', '2025-12-30', 1, 1), 
+        ('2025-10-15', '2025-12-30', 2, 2),
+        ('2025-09-20', '2026-01-05', 1, 3), 
+        ('2025-10-01', '2025-12-30', 2, 4),
+        ('2025-08-15', '2026-01-15', 4, 5),
+        ('2025-10-20', '2025-12-30', 3, 6),
+        ('2025-09-25', '2025-12-15', 2, 7),
+        ('2025-09-10', '2025-12-15', 4, 8),
+        ('2025-09-05', '2025-12-15', 3, 9),
+        ('2025-10-25', '2025-12-25', 1, 10)"""), 
     'CONSUMO': (
         """INSERT INTO consumo (data_hora_consumo, quantidade_consumida, id_atuador, id_recurso) VALUES
-        ('2024-11-15 08:00:00', 50.5, 1, 1),
-        ('2024-11-15 08:00:00', 3.2, 2, 2),
-        ('2024-11-15 12:00:00', 45.0, 1, 1),
-        ('2024-11-15 12:00:00', 2.8, 2, 2),
-        ('2024-11-15 06:00:00', 5.5, 5, 2),
-        ('2024-11-15 18:00:00', 6.2, 5, 2),
-        ('2024-11-15 10:00:00', 75.0, 3, 1),
-        ('2024-11-15 14:00:00', 4.1, 4, 2),
-        ('2024-11-15 08:00:00', 2.5, 1, 3),
-        ('2024-11-15 09:00:00', 60.0, 7, 1),
-        ('2024-11-15 11:00:00', 3.5, 8, 2),
-        ('2024-11-15 13:00:00', 5.8, 9, 2),
-        ('2024-11-15 15:00:00', 55.0, 10, 1),
-        ('2024-11-15 16:00:00', 3.9, 11, 2),
-        ('2024-11-14 08:00:00', 48.5, 1, 1),
-        ('2024-11-14 08:00:00', 3.1, 2, 2),
-        ('2024-11-14 12:00:00', 52.0, 3, 1),
-        ('2024-11-14 12:00:00', 3.6, 4, 2),
-        ('2024-11-14 10:00:00', 1.8, 3, 3),
-        ('2024-11-14 14:00:00', 3.2, 1, 5)"""),
+        ('2025-11-15 08:00:00', 50.5, 1, 1),
+        ('2025-11-15 08:00:00', 3.2, 2, 2),
+        ('2025-11-15 12:00:00', 45.0, 1, 1),
+        ('2025-11-15 12:00:00', 2.8, 2, 2),
+        ('2025-11-15 06:00:00', 5.5, 5, 2),
+        ('2025-11-15 18:00:00', 6.2, 5, 2),
+        ('2025-11-15 10:00:00', 75.0, 3, 1),
+        ('2025-11-15 14:00:00', 4.1, 4, 2),
+        ('2025-11-15 08:00:00', 2.5, 1, 3),
+        ('2025-11-15 09:00:00', 60.0, 7, 1),
+        ('2025-11-15 11:00:00', 3.5, 8, 2),
+        ('2025-11-15 13:00:00', 5.8, 9, 2),
+        ('2025-11-15 15:00:00', 55.0, 10, 1),
+        ('2025-11-15 16:00:00', 3.9, 11, 2),
+        ('2025-11-14 08:00:00', 48.5, 1, 1),
+        ('2025-11-14 08:00:00', 3.1, 2, 2),
+        ('2025-11-14 12:00:00', 52.0, 3, 1),
+        ('2025-11-14 12:00:00', 3.6, 4, 2),
+        ('2025-11-14 10:00:00', 1.8, 3, 3),
+        ('2025-11-14 14:00:00', 3.2, 1, 5)"""),
     'ESTUFA_FUNCIONARIO': (
         """INSERT INTO estufa_funcionario (data_inicio, data_fim, id_funcionario, id_estufa) VALUES
-        ('2024-01-01', NULL, 1, 1),
-        ('2024-01-01', NULL, 2, 1),
-        ('2024-02-01', NULL, 3, 2),
-        ('2024-01-01', NULL, 4, 2),
-        ('2024-03-01', '2024-10-31', 5, 3),
-        ('2024-11-01', NULL, 5, 1),
-        ('2024-02-15', NULL, 6, 3),
-        ('2024-03-10', NULL, 7, 4),
-        ('2024-01-20', NULL, 1, 4),
-        ('2024-04-01', '2024-09-30', 3, 5),
-        ('2024-10-01', NULL, 6, 5)""")
+        ('2025-01-01', NULL, 1, 1),
+        ('2025-01-01', NULL, 2, 1),
+        ('2025-02-01', NULL, 3, 2),
+        ('2025-01-01', NULL, 4, 2),
+        ('2025-03-01', '2025-10-31', 5, 3),
+        ('2025-11-01', NULL, 5, 1),
+        ('2025-02-15', NULL, 6, 3),
+        ('2025-03-10', NULL, 7, 4),
+        ('2025-01-20', NULL, 1, 4),
+        ('2025-04-01', '2025-09-30', 3, 5),
+        ('2025-10-01', NULL, 6, 5)""")
 }
 
 # Valores para deletar as tabelas (ordem reversa devido às dependências)
@@ -360,7 +366,7 @@ update = {
     'SENSOR': (
         """UPDATE sensor
         SET tipo_sensor = 'Temperatura e Umidade'
-        WHERE id_sensor = 1"""),
+        WHERE id_sensor = 7"""),
     'CULTURA': (
         """UPDATE cultura
         SET tempo_ciclo_dias = 95
@@ -385,11 +391,11 @@ delete = {
 def connect_estufa():
     try:
         cnx = psycopg2.connect(
-            host='localhost',
-            port='5433',
-            database='planteligente',
-            user='postgres',
-            password='admin'
+            host=os.getenv('DB_HOST', 'localhost'),
+            port=os.getenv('DB_PORT', '5433'),
+            database=os.getenv('DB_NAME', 'planteligente'),
+            user=os.getenv('DB_USER', 'postgres'),
+            password=os.getenv('DB_PASSWORD', 'admin')
         )
         print("Conectado ao servidor PostgreSQL")
         cursor = cnx.cursor()
@@ -439,22 +445,47 @@ def create_all_tables(connect):
 def show_table(connect):
     print("\n---SELECIONAR TABELA---")
     cursor = connect.cursor()
-    for table_name in tables:
-        print(f"Nome: {table_name}")
+    # Lista os nomes das tabelas disponíveis
+    available_tables = list(tables.keys())
+    print("Tabelas disponíveis:")
+    for table_name in available_tables:
+        print(f"- {table_name}")
+        
     try:
         name = input("\nDigite o nome da tabela que deseja consultar: ").upper()
+        
+        if name not in available_tables:
+            print(f"❌ Erro: Tabela '{name}' não encontrada ou indisponível.")
+            return
+
         select = f"SELECT * FROM {name.lower()}"
         cursor.execute(select)
+        
+        # --- NOVO TRECHO PARA MOSTRAR OS NOMES DAS COLUNAS ---
         print(f"\nTABELA {name}")
+        
+        # Obtém os nomes das colunas usando cursor.description
+        # Cada tupla em cursor.description contém (name, type_code, ...)
+        column_names = [desc[0] for desc in cursor.description]
+        
+        # Imprime os nomes das colunas para indicar o significado de cada dado
+        print("COLUNAS:")
+        print(column_names)
+        print("-" * 50) # Separador visual
+
+        # --- FIM DO NOVO TRECHO ---
+        
         myresult = cursor.fetchall()
         if myresult:
             for x in myresult:
                 print(x)
         else:
             print("Tabela vazia")
+            
     except Error as err:
-        print(err)
-    cursor.close()
+        print(f"❌ Erro ao consultar a tabela: {err}")
+    finally:
+        cursor.close()
 
 
 def insert_value(connect):
@@ -706,6 +737,19 @@ def consulta_extra(connect):
     cursor.close()
 
 
+def inserir_medicao_com_ia(connect):
+    """Nova função para inserir medição e analisar com IA"""
+    print("\n---INSERIR MEDIÇÃO COM ANÁLISE IA---")
+    try:
+        id_sensor = int(input("ID do Sensor: "))
+        valor = float(input("Valor medido: "))
+        inserir_medicao_com_analise_ia(connect, id_sensor, valor)
+    except ValueError:
+        print("❌ Erro: Digite valores numéricos válidos")
+    except Exception as e:
+        print(f"❌ Erro: {e}")
+
+
 def exit_db(connect):
     print("\n---EXIT DB---")
     connect.close()
@@ -759,11 +803,12 @@ try:
         12. UPDATE VALUES (Manual)
         13. DELETE VALUES (Manual)
         14. CLEAR ALL ESTUFA
+        15. 🤖 INSERIR MEDIÇÃO COM ANÁLISE IA
         0.  DISCONNECT DB\n """
         print(interface)
 
         choice = int(input("Opção: "))
-        if choice < 0 or choice > 14:
+        if choice < 0 or choice > 15:
             print("Erro tente novamente!")
             continue
 
@@ -813,6 +858,9 @@ try:
 
         if choice == 14:
             drop_all_tables(con)
+
+        if choice == 15:
+            inserir_medicao_com_ia(con)
 
     con.close()
 

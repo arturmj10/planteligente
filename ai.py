@@ -4,9 +4,12 @@
 import google.generativeai as genai
 from datetime import datetime, timedelta
 import statistics
+import os
+from dotenv import load_dotenv
 
+load_dotenv()
 # Configuração da API do Gemini
-GEMINI_API_KEY = "SUA_CHAVE_API_AQUI"
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 try:
     genai.configure(api_key=GEMINI_API_KEY)
@@ -20,7 +23,7 @@ class AIGreenhouseMonitor:
     def __init__(self, connection):
         self.connection = connection
         if IA_DISPONIVEL:
-            self.model = genai.GenerativeModel('gemini-pro')
+            self.model = genai.GenerativeModel('gemini-2.5-flash')
         else:
             self.model = None
     
@@ -54,8 +57,11 @@ class AIGreenhouseMonitor:
             return None
         return statistics.median(valores)
     
-    def verificar_anomalia_com_mediana(self, id_medicao):
-        """Verifica se uma medição está fora do padrão usando mediana das últimas 5 medições"""
+    def verificar_anomalia_e_criar_alerta(self, id_medicao):
+        """
+        SISTEMA TRADICIONAL: Verifica anomalia usando mediana e CRIA ALERTA no banco
+        Retorna o ID do alerta criado ou None se não houver anomalia
+        """
         cursor = self.connection.cursor()
         
         query = """
@@ -82,9 +88,9 @@ class AIGreenhouseMonitor:
         
         cursor.execute(query, (id_medicao,))
         result = cursor.fetchone()
-        cursor.close()
         
         if not result:
+            cursor.close()
             return None
         
         valor_atual = float(result[1])
@@ -141,40 +147,73 @@ class AIGreenhouseMonitor:
                 motivo = f"Umidade acima do ideal (mediana: {valor_para_analise:.2f}% > máximo: {umid_max}%)"
                 severidade = "Alta" if diferenca > 15 else "Média" if diferenca > 5 else "Baixa"
         
-        if fora_padrao:
-            return {
-                'id_medicao': result[0],
-                'valor_atual': valor_atual,
-                'valor_mediana': valor_para_analise,
-                'ultimas_medicoes': ultimas_medicoes,
-                'data_hora': result[2],
-                'tipo_sensor': tipo_sensor,
-                'unidade_medida': unidade_medida,
-                'id_estufa': id_estufa,
-                'motivo': motivo,
-                'severidade': severidade
-            }
+        if not fora_padrao:
+            cursor.close()
+            return None
         
-        return None
-    
-    def get_estufa_context(self, id_estufa):
-        """Obtém informações completas da estufa"""
-        cursor = self.connection.cursor()
-        query = """
-        SELECT id_estufa, nome, localizacao, tamanho, status
-        FROM estufa WHERE id_estufa = %s
+        # ===== CRIA O ALERTA NO BANCO DE DADOS =====
+        print(f"\n⚠️  ANOMALIA DETECTADA [{severidade}]: {motivo}")
+        
+        query_insert_alerta = """
+        INSERT INTO alerta (seriedade, mensagem, data_hora_alerta, id_medicao)
+        VALUES (%s, %s, NOW(), %s)
+        RETURNING id_alerta
         """
-        cursor.execute(query, (id_estufa,))
+        
+        cursor.execute(query_insert_alerta, (severidade, motivo, id_medicao))
+        id_alerta = cursor.fetchone()[0]
+        self.connection.commit()
+        
+        print(f"🔔 ALERTA #{id_alerta} criado no banco de dados!")
+        
+        cursor.close()
+        return id_alerta
+    
+    def get_alerta_info(self, id_alerta):
+        """Busca informações completas do alerta para a IA processar"""
+        cursor = self.connection.cursor()
+        
+        query = """
+        SELECT 
+            a.id_alerta,
+            a.seriedade,
+            a.mensagem,
+            a.data_hora_alerta,
+            m.id_medicao,
+            m.valor_medido,
+            s.id_sensor,
+            s.tipo_sensor,
+            s.unidade_medida,
+            s.id_estufa,
+            e.nome AS nome_estufa,
+            e.localizacao,
+            e.tamanho
+        FROM alerta a
+        JOIN medicao m ON a.id_medicao = m.id_medicao
+        JOIN sensor s ON m.id_sensor = s.id_sensor
+        JOIN estufa e ON s.id_estufa = e.id_estufa
+        WHERE a.id_alerta = %s
+        """
+        
+        cursor.execute(query, (id_alerta,))
         result = cursor.fetchone()
         cursor.close()
         
         if result:
             return {
-                'id_estufa': result[0],
-                'nome': result[1],
-                'localizacao': result[2],
-                'tamanho': result[3],
-                'status': result[4]
+                'id_alerta': result[0],
+                'severidade': result[1],
+                'mensagem': result[2],
+                'data_hora_alerta': result[3],
+                'id_medicao': result[4],
+                'valor_atual': float(result[5]),
+                'id_sensor': result[6],
+                'tipo_sensor': result[7],
+                'unidade_medida': result[8],
+                'id_estufa': result[9],
+                'nome_estufa': result[10],
+                'localizacao': result[11],
+                'tamanho': float(result[12])
             }
         return None
     
@@ -192,8 +231,12 @@ class AIGreenhouseMonitor:
         """Obtém informações sobre a cultura plantada na estufa"""
         cursor = self.connection.cursor()
         query = """
-        SELECT DISTINCT c.nome_popular, c.nome_cientifico,
-               ci.temp_min, ci.temp_max, ci.umid_min, ci.umid_max
+        SELECT 
+            c.nome_popular, 
+            c.nome_cientifico,
+            ci.temp_min, ci.temp_max, ci.umid_min, ci.umid_max,
+            -- ** CORREÇÃO: Adicionando data_plantio à lista de SELECT **
+            lp.data_plantio 
         FROM cultura c
         JOIN condicao_ideal ci ON c.id_cultura = ci.id_cultura
         JOIN lote_plantio lp ON c.id_cultura = lp.id_cultura
@@ -214,6 +257,10 @@ class AIGreenhouseMonitor:
                 'umid_max': float(result[5])
             }
         return None
+    
+    def get_historico_medicoes(self, id_sensor, id_estufa, tipo_sensor):
+        """Obtém histórico recente para contexto da IA"""
+        return self.get_ultimas_medicoes_sensor(id_sensor, tipo_sensor, id_estufa, 5)
     
     def get_funcionario_com_menos_tarefas(self, id_estufa):
         """Seleciona funcionário com menos tarefas pendentes"""
@@ -264,22 +311,27 @@ class AIGreenhouseMonitor:
             }
         return None
     
-    def generate_task_with_ai(self, medicao_info, estufa_info, atuadores, cultura_info):
-        """Usa IA do Gemini para gerar tarefa contextualizada"""
+    def generate_task_with_ai(self, alerta_info, atuadores, cultura_info, historico_medicoes):
+        """
+        IA DO GEMINI: Recebe o ALERTA e gera tarefa contextualizada
+        """
         if not self.model:
-            return f"[{medicao_info['severidade']}] Corrigir {medicao_info['tipo_sensor'].lower()} na {estufa_info['nome']}. {medicao_info['motivo']}"
+            return f"[{alerta_info['severidade']}] Corrigir {alerta_info['tipo_sensor'].lower()} na {alerta_info['nome_estufa']}. {alerta_info['mensagem']}"
         
         prompt = f"""Você é um assistente especializado em gestão de estufas inteligentes. 
 
-SITUAÇÃO DETECTADA (CONFIRMADA POR MEDIANA):
-- Estufa: {estufa_info['nome']} ({estufa_info['localizacao']})
-- Tamanho: {estufa_info['tamanho']} m²
-- Problema: {medicao_info['motivo']}
-- Severidade: {medicao_info['severidade']}
-- Tipo de sensor: {medicao_info['tipo_sensor']}
-- Valor atual: {medicao_info['valor_atual']} {medicao_info['unidade_medida']}
-- Mediana (últimas 5 medições): {medicao_info['valor_mediana']:.2f} {medicao_info['unidade_medida']}
-- Histórico recente: {[f"{v:.2f}" for v in medicao_info['ultimas_medicoes']]}
+ALERTA RECEBIDO DO SISTEMA:
+- ID do Alerta: #{alerta_info['id_alerta']}
+- Estufa: {alerta_info['nome_estufa']} ({alerta_info['localizacao']})
+- Tamanho: {alerta_info['tamanho']} m²
+- Severidade: {alerta_info['severidade']}
+- Problema Detectado: {alerta_info['mensagem']}
+- Tipo de sensor: {alerta_info['tipo_sensor']}
+- Valor atual: {alerta_info['valor_atual']} {alerta_info['unidade_medida']}
+- Data/Hora: {alerta_info['data_hora_alerta']}
+
+HISTÓRICO RECENTE (últimas 5 medições):
+{[f"{v:.2f}" for v in historico_medicoes]}
 
 CULTURA ATUAL:
 """
@@ -301,7 +353,7 @@ Gere uma descrição CONCISA e TÉCNICA (máximo 400 caracteres) para uma tarefa
 A descrição deve:
 1. Especificar qual atuador usar (se aplicável)
 2. Explicar BREVEMENTE a ação necessária
-3. Mencionar a severidade e tendência
+3. Mencionar a severidade e tendência baseada no histórico
 4. Ser direta e objetiva
 
 RETORNE APENAS A DESCRIÇÃO DA TAREFA, SEM INTRODUÇÕES.
@@ -315,7 +367,7 @@ RETORNE APENAS A DESCRIÇÃO DA TAREFA, SEM INTRODUÇÕES.
             return descricao
         except Exception as e:
             print(f"Erro ao gerar tarefa com IA: {e}")
-            return f"[{medicao_info['severidade']}] Corrigir {medicao_info['tipo_sensor'].lower()} na {estufa_info['nome']}. {medicao_info['motivo']}"
+            return f"[{alerta_info['severidade']}] Corrigir {alerta_info['tipo_sensor'].lower()} na {alerta_info['nome_estufa']}. {alerta_info['mensagem']}"
     
     def create_task_in_database(self, descricao, id_estufa, severidade="Média"):
         """Cria tarefa no banco com distribuição igualitária"""
@@ -347,32 +399,61 @@ RETORNE APENAS A DESCRIÇÃO DA TAREFA, SEM INTRODUÇÕES.
         
         return id_tarefa
     
-    def process_medicao_automatico(self, id_medicao):
-        """Processo automático completo após inserção de medição"""
-        print(f"\n🔍 Analisando medição ID: {id_medicao}...")
+    def processar_alerta_com_ia(self, id_alerta):
+        """
+        IA PROCESSA O ALERTA: Recebe um alerta e cria a tarefa corretiva
+        """
+        print(f"\n🤖 IA processando alerta #{id_alerta}...")
         
-        medicao_info = self.verificar_anomalia_com_mediana(id_medicao)
-        
-        if not medicao_info:
-            print("✅ Medição dentro do padrão esperado (baseado na mediana).")
+        # Busca informações do alerta
+        alerta_info = self.get_alerta_info(id_alerta)
+        if not alerta_info:
+            print("❌ Alerta não encontrado!")
             return None
         
-        print(f"\n⚠️  ANOMALIA CONFIRMADA [{medicao_info['severidade']}]: {medicao_info['motivo']}")
+        # Busca contexto adicional
+        atuadores = self.get_atuadores_estufa(alerta_info['id_estufa'])
+        cultura_info = self.get_cultura_info(alerta_info['id_estufa'])
+        historico_medicoes = self.get_historico_medicoes(
+            alerta_info['id_sensor'], 
+            alerta_info['id_estufa'], 
+            alerta_info['tipo_sensor']
+        )
         
-        estufa_info = self.get_estufa_context(medicao_info['id_estufa'])
-        atuadores = self.get_atuadores_estufa(medicao_info['id_estufa'])
-        cultura_info = self.get_cultura_info(medicao_info['id_estufa'])
-        
-        print("🤖 Consultando IA para gerar tarefa corretiva...")
-        descricao_tarefa = self.generate_task_with_ai(medicao_info, estufa_info, atuadores, cultura_info)
+        print("🧠 Consultando IA Gemini para gerar tarefa corretiva...")
+        descricao_tarefa = self.generate_task_with_ai(alerta_info, atuadores, cultura_info, historico_medicoes)
         
         print(f"📝 Tarefa gerada: {descricao_tarefa}")
         
-        id_tarefa = self.create_task_in_database(descricao_tarefa, medicao_info['id_estufa'], medicao_info['severidade'])
+        id_tarefa = self.create_task_in_database(
+            descricao_tarefa, 
+            alerta_info['id_estufa'], 
+            alerta_info['severidade']
+        )
         
         if id_tarefa:
             print(f"✅ Tarefa #{id_tarefa} criada com sucesso!")
-            print(f"⏰ Urgência: {medicao_info['severidade']}")
+            print(f"⏰ Urgência: {alerta_info['severidade']}")
+        
+        return id_tarefa
+    
+    def process_medicao_automatico(self, id_medicao):
+        """
+        PROCESSO COMPLETO AUTOMATIZADO:
+        1. Sistema tradicional detecta anomalia e cria ALERTA
+        2. IA processa o alerta e cria TAREFA
+        """
+        print(f"\n🔍 Analisando medição ID: {id_medicao}...")
+        
+        # ETAPA 1: Sistema tradicional cria alerta
+        id_alerta = self.verificar_anomalia_e_criar_alerta(id_medicao)
+        
+        if not id_alerta:
+            print("✅ Medição dentro do padrão esperado (baseado na mediana).")
+            return None
+        
+        # ETAPA 2: IA processa o alerta e cria tarefa
+        id_tarefa = self.processar_alerta_com_ia(id_alerta)
         
         return id_tarefa
 
@@ -380,7 +461,10 @@ RETORNE APENAS A DESCRIÇÃO DA TAREFA, SEM INTRODUÇÕES.
 # Função para ser chamada do sistema principal
 def inserir_medicao_com_analise_ia(connect, id_sensor, valor_medido):
     """
-    Insere medição e faz análise automática com IA
+    Insere medição e faz análise automática:
+    1. Sistema detecta anomalia → cria ALERTA
+    2. IA processa alerta → cria TAREFA
+    
     ESTA É A FUNÇÃO PRINCIPAL PARA CHAMAR DO MENU
     """
     cursor = connect.cursor()
@@ -400,7 +484,7 @@ def inserir_medicao_com_analise_ia(connect, id_sensor, valor_medido):
         
         print(f"✅ Medição #{id_medicao} inserida no banco de dados")
         
-        # Processa automaticamente com IA
+        # Processa automaticamente: ALERTA → IA → TAREFA
         monitor = AIGreenhouseMonitor(connect)
         monitor.process_medicao_automatico(id_medicao)
         
