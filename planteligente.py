@@ -5,6 +5,8 @@ from psycopg2 import DatabaseError, OperationalError
 import os
 from dotenv import load_dotenv
 from ai import inserir_medicao_com_analise_ia
+from tabulate import tabulate
+import matplotlib.pyplot as plt
 
 # Carrega variáveis do arquivo .env
 load_dotenv()
@@ -275,8 +277,8 @@ inserts = {
         ('Baixa', 'Umidade abaixo do recomendado', '2025-11-15 12:05:00', 6),
         ('Alta', 'Temperatura crítica detectada', '2025-11-13 12:05:00', 29),
         ('Média', 'Umidade fora da faixa ideal', '2025-11-13 12:05:00', 30),
-        ('Baixa', 'Luminosidade levemente baixa', '2025-11-15 08:05:00', 15),
-        ('Média', 'pH do solo necessita correção', '2025-11-15 08:05:00', 9)"""),
+        ('Alta', 'Luminosidade levemente baixa', '2025-11-15 08:05:00', 15),
+        ('Alta', 'pH do solo necessita correção', '2025-11-15 08:05:00', 9)"""),
     'LOTE_PLANTIO': (
         """INSERT INTO lote_plantio (data_plantio, data_previsao_colheita, id_estufa, id_cultura) VALUES
         ('2025-09-01', '2025-12-30', 1, 1), 
@@ -392,7 +394,7 @@ def connect_estufa():
     try:
         cnx = psycopg2.connect(
             host=os.getenv('DB_HOST', 'localhost'),
-            port=os.getenv('DB_PORT', '5433'),
+            port=os.getenv('DB_PORT', '5432'),
             database=os.getenv('DB_NAME', 'planteligente'),
             user=os.getenv('DB_USER', 'postgres'),
             password=os.getenv('DB_PASSWORD', 'admin')
@@ -633,13 +635,54 @@ def consulta1(connect):
     ORDER BY
         e.nome, total_consumido DESC
     """
-    print("\nPrimeira Consulta: Consumo por recurso e estufa")
+    print("\nPrimeira Consulta: Consumo total por recursos e estufa")
     cursor = connect.cursor()
     cursor.execute(select_query)
-    myresult = cursor.fetchall()
-    for x in myresult:
-        print(x)
+    rows = cursor.fetchall()
+
+    # Tabela formatada
+    headers = ["Estufa", "Recurso", "Total Consumido"]
+    print(tabulate(rows, headers=headers, tablefmt="fancy_grid"))
+
     cursor.close()
+
+    if not rows:
+        print("Nenhum dado encontrado.")
+        return
+
+    # Agrupar por recurso
+    dados_por_recurso = {}
+    for estufa, recurso, total in rows:
+        if recurso not in dados_por_recurso:
+            dados_por_recurso[recurso] = []
+        dados_por_recurso[recurso].append((estufa, total))
+
+    recursos = list(dados_por_recurso.keys())
+
+    # Criar subplots
+    fig, axes = plt.subplots(len(recursos), 1, figsize=(12, 4 * len(recursos)))
+
+    if len(recursos) == 1:
+        axes = [axes]
+
+    for i, recurso in enumerate(recursos):
+        dados = dados_por_recurso[recurso]
+        estufas = [item[0] for item in dados]
+        totais = [item[1] for item in dados]
+
+        ax = axes[i]
+        ax.bar(estufas, totais)
+
+        ax.set_title(f"Consumo do Recurso: {recurso}")
+        ax.set_xlabel("Estufa")
+        ax.set_ylabel("Total Consumido")
+
+        # Correção do eixo X
+        ax.set_xticks(range(len(estufas)))
+        ax.set_xticklabels(estufas, rotation=45)
+
+    plt.tight_layout()
+    plt.show()
 
 
 def consulta2(connect):
@@ -670,13 +713,48 @@ def consulta2(connect):
         f.nome, quantidade_alertas_criticos DESC
     """
     print("\nSegunda Consulta: Alertas críticos por funcionário e estufa")
+
     cursor = connect.cursor()
     cursor.execute(select_query)
-    myresult = cursor.fetchall()
-    for x in myresult:
-        print(x)
+    rows = cursor.fetchall()
     cursor.close()
 
+    if not rows:
+        print("Nenhum alerta crítico encontrado.")
+        return
+
+    # Tabela formatada
+    print(tabulate(rows, headers=["Funcionário", "Estufa", "Alertas Críticos"], tablefmt="fancy_grid"))
+
+    # Organizar os dados por estufa
+    dados_por_estufa = {}
+    for funcionario, estufa, qtd in rows:
+        if estufa not in dados_por_estufa:
+            dados_por_estufa[estufa] = []
+        dados_por_estufa[estufa].append((funcionario, qtd))
+
+    estufas = list(dados_por_estufa.keys())
+
+    # Criar um subplot para cada estufa
+    fig, axes = plt.subplots(len(estufas), 1, figsize=(12, 5 * len(estufas)))
+
+    if len(estufas) == 1:
+        axes = [axes]
+
+    for i, estufa in enumerate(estufas):
+        dados = dados_por_estufa[estufa]
+        funcionarios = [item[0] for item in dados]
+        totais = [item[1] for item in dados]
+
+        ax = axes[i]
+        ax.bar(funcionarios, totais)
+        ax.set_title(f"Alertas Críticos na {estufa}")
+        ax.set_xlabel("Funcionário")
+        ax.set_ylabel("Total de Alertas Críticos")
+        ax.set_xticklabels(funcionarios, rotation=45)
+
+    plt.tight_layout()
+    plt.show()
 
 def consulta3(connect):
     select_query = """
@@ -706,11 +784,29 @@ def consulta3(connect):
     print("\nTerceira Consulta: Desvio médio de temperatura por cultura")
     cursor = connect.cursor()
     cursor.execute(select_query)
-    myresult = cursor.fetchall()
-    for x in myresult:
-        print(x)
+    rows = cursor.fetchall()
     cursor.close()
 
+    if not rows:
+        print("Nenhum dado encontrado.")
+        return
+
+    # Tabela formatada
+    print(tabulate(rows, headers=["Cultura","Estufa","Desvio Médio"], tablefmt="fancy_grid"))
+
+    # Preparar dados para gráfico único
+    labels = [f"{cultura} - {estufa}" for cultura, estufa, _ in rows]
+    valores = [desvio for _, _, desvio in rows]
+
+    # Gráfico único
+    plt.figure(figsize=(14, 6))
+    plt.bar(labels, valores)
+    plt.ylabel("Desvio Médio (°C)")
+    plt.title("Desvio Médio de Temperatura por Cultura e Estufa")
+    plt.xticks(rotation=45, ha="right")
+
+    plt.tight_layout()
+    plt.show()
 
 def consulta_extra(connect):
     select_query = """
