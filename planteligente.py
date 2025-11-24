@@ -397,7 +397,7 @@ def connect_estufa():
             port=os.getenv('DB_PORT', '5432'),
             database=os.getenv('DB_NAME', 'planteligente'),
             user=os.getenv('DB_USER', 'postgres'),
-            password=os.getenv('DB_PASSWORD', 'admin')
+            password=os.getenv('DB_PASSWORD', 'postgres')
         )
         print("Conectado ao servidor PostgreSQL")
         cursor = cnx.cursor()
@@ -617,40 +617,39 @@ def delete_test(connect):
 
 
 def consulta1(connect):
-    select_query = """
-    SELECT
-        e.nome AS estufa,
-        r.nome_recurso AS recurso,
-        SUM(c.quantidade_consumida) AS total_consumido
-    FROM
-        estufa e
-    JOIN
-        atuador a ON e.id_estufa = a.id_estufa
-    JOIN
-        consumo c ON a.id_atuador = c.id_atuador
-    JOIN
-        recurso r ON c.id_recurso = r.id_recurso
-    GROUP BY
-        e.nome, r.nome_recurso
-    ORDER BY
-        e.nome, total_consumido DESC
+    query = """
+        SELECT
+            e.nome AS estufa,
+            r.nome_recurso AS recurso,
+            SUM(c.quantidade_consumida) AS total_consumido
+        FROM estufa e
+        JOIN atuador a ON e.id_estufa = a.id_estufa
+        JOIN consumo c ON a.id_atuador = c.id_atuador
+        JOIN recurso r ON c.id_recurso = r.id_recurso
+        GROUP BY e.nome, r.nome_recurso
+        ORDER BY e.nome, total_consumido DESC
     """
-    print("\nPrimeira Consulta: Consumo total por recursos e estufa")
+
     cursor = connect.cursor()
-    cursor.execute(select_query)
+    cursor.execute(query)
     rows = cursor.fetchall()
-
-    # Tabela formatada
-    headers = ["Estufa", "Recurso", "Total Consumido"]
-    print(tabulate(rows, headers=headers, tablefmt="fancy_grid"))
-
     cursor.close()
 
+    return rows
+
+def exibir_tabela1(rows):
     if not rows:
         print("Nenhum dado encontrado.")
         return
 
-    # Agrupar por recurso
+    print("\nTabela – Consumo Total por Estufa e Recurso\n")
+    print(tabulate(rows, headers=["Estufa", "Recurso", "Total Consumido"], tablefmt="fancy_grid"))
+
+def exibir_graficos1(rows):
+    if not rows:
+        return
+
+    # Agrupa por recurso
     dados_por_recurso = {}
     for estufa, recurso, total in rows:
         if recurso not in dados_por_recurso:
@@ -659,7 +658,7 @@ def consulta1(connect):
 
     recursos = list(dados_por_recurso.keys())
 
-    # Criar subplots
+    # Subplots (um gráfico por recurso)
     fig, axes = plt.subplots(len(recursos), 1, figsize=(12, 4 * len(recursos)))
 
     if len(recursos) == 1:
@@ -667,26 +666,24 @@ def consulta1(connect):
 
     for i, recurso in enumerate(recursos):
         dados = dados_por_recurso[recurso]
+
         estufas = [item[0] for item in dados]
         totais = [item[1] for item in dados]
 
         ax = axes[i]
         ax.bar(estufas, totais)
 
-        ax.set_title(f"Consumo do Recurso: {recurso}")
+        ax.set_title(f"Consumo do recurso: {recurso}")
         ax.set_xlabel("Estufa")
         ax.set_ylabel("Total Consumido")
-
-        # Correção do eixo X
         ax.set_xticks(range(len(estufas)))
         ax.set_xticklabels(estufas, rotation=45)
 
     plt.tight_layout()
     plt.show()
 
-
 def consulta2(connect):
-    select_query = """
+    query = """
     SELECT
         f.nome AS nome_funcionario,
         e.nome AS estufa,
@@ -712,21 +709,29 @@ def consulta2(connect):
     ORDER BY
         f.nome, quantidade_alertas_criticos DESC
     """
-    print("\nSegunda Consulta: Alertas críticos por funcionário e estufa")
 
     cursor = connect.cursor()
-    cursor.execute(select_query)
+    cursor.execute(query)
     rows = cursor.fetchall()
     cursor.close()
 
+    return rows
+
+def exibir_tabela2(rows):
     if not rows:
         print("Nenhum alerta crítico encontrado.")
         return
 
-    # Tabela formatada
-    print(tabulate(rows, headers=["Funcionário", "Estufa", "Alertas Críticos"], tablefmt="fancy_grid"))
+    print("\nSegunda Consulta: Alertas críticos por funcionário e estufa")
+    print(tabulate(rows,
+                   headers=["Funcionário", "Estufa", "Alertas Críticos"],
+                   tablefmt="fancy_grid"))
 
-    # Organizar os dados por estufa
+def exibir_graficos2(rows):
+    if not rows:
+        return
+
+    # Organizar dados
     dados_por_estufa = {}
     for funcionario, estufa, qtd in rows:
         if estufa not in dados_por_estufa:
@@ -735,7 +740,6 @@ def consulta2(connect):
 
     estufas = list(dados_por_estufa.keys())
 
-    # Criar um subplot para cada estufa
     fig, axes = plt.subplots(len(estufas), 1, figsize=(12, 5 * len(estufas)))
 
     if len(estufas) == 1:
@@ -757,7 +761,7 @@ def consulta2(connect):
     plt.show()
 
 def consulta3(connect):
-    select_query = """
+    query = """
     SELECT
         c.nome_popular AS cultura,
         e.nome AS estufa,
@@ -775,30 +779,42 @@ def consulta3(connect):
     JOIN
         medicao m ON s.id_sensor = m.id_sensor
     WHERE
-        s.tipo_sensor = 'Temperatura' AND m.valor_medido IS NOT NULL
+        s.tipo_sensor = 'Temperatura'
+        AND m.valor_medido IS NOT NULL
     GROUP BY
         c.nome_popular, e.nome
     ORDER BY
         desvio_medio_temperatura DESC
     """
-    print("\nTerceira Consulta: Desvio médio de temperatura por cultura")
+
     cursor = connect.cursor()
-    cursor.execute(select_query)
+    cursor.execute(query)
     rows = cursor.fetchall()
     cursor.close()
 
+    return rows
+
+def exibir_tabela3(rows):
     if not rows:
         print("Nenhum dado encontrado.")
         return
 
-    # Tabela formatada
-    print(tabulate(rows, headers=["Cultura","Estufa","Desvio Médio"], tablefmt="fancy_grid"))
+    print("\nTerceira Consulta: Desvio médio de temperatura por cultura")
 
-    # Preparar dados para gráfico único
+    print(tabulate(
+        rows,
+        headers=["Cultura", "Estufa", "Desvio Médio Temp."],
+        tablefmt="fancy_grid"
+    ))
+
+def exibir_graficos3(rows):
+    if not rows:
+        return
+
+    # Preparar dados
     labels = [f"{cultura} - {estufa}" for cultura, estufa, _ in rows]
     valores = [desvio for _, _, desvio in rows]
 
-    # Gráfico único
     plt.figure(figsize=(14, 6))
     plt.bar(labels, valores)
     plt.ylabel("Desvio Médio (°C)")
@@ -806,7 +822,6 @@ def consulta3(connect):
     plt.xticks(rotation=45, ha="right")
 
     plt.tight_layout()
-    plt.show()
 
 def consulta_extra(connect):
     select_query = """
@@ -858,18 +873,24 @@ def crud_estufa(connect):
     insert_test(connect)
 
     print("\n---CONSULTAS BEFORE---")
-    consulta1(connect)
-    consulta2(connect)
-    consulta3(connect)
+    rows = consulta1(connect)
+    exibir_tabela1(rows)
+    rows = consulta2(connect)
+    exibir_tabela2(rows)
+    rows = consulta3(connect)
+    exibir_tabela3(rows)
     consulta_extra(connect)
 
     update_test(connect)
     delete_test(connect)
 
     print("\n---CONSULTAS AFTER---")
-    consulta1(connect)
-    consulta2(connect)
-    consulta3(connect)
+    rows = consulta1(connect)
+    exibir_tabela1(rows)
+    rows = consulta2(connect)
+    exibir_tabela2(rows)
+    rows = consulta3(connect)
+    exibir_tabela3(rows)
     consulta_extra(connect)
 
 
@@ -890,21 +911,24 @@ try:
         3.  TESTE - Insert all values
         4.  TESTE - Update
         5.  TESTE - Delete
-        6.  CONSULTA 01
-        7.  CONSULTA 02
-        8.  CONSULTA 03
-        9.  CONSULTA EXTRA
-        10. CONSULTA TABELAS INDIVIDUAIS
-        11. INSERT VALUES (Manual)
-        12. UPDATE VALUES (Manual)
-        13. DELETE VALUES (Manual)
-        14. CLEAR ALL ESTUFA
-        15. 🤖 INSERIR MEDIÇÃO COM ANÁLISE IA
+        6.  CONSULTA 01 - Tabela
+        7.  CONSULTA 01 - Gráfico
+        8.  CONSULTA 02 - Tabela
+        9.  CONSULTA 02 - Gráfico
+        10. CONSULTA 03 - Tabela
+        11. CONSULTA 03 - Gráfico
+        12. CONSULTA EXTRA
+        13. CONSULTA TABELAS INDIVIDUAIS
+        14. INSERT VALUES (Manual)
+        15. UPDATE VALUES (Manual)
+        16. DELETE VALUES (Manual)
+        17. CLEAR ALL ESTUFA
+        18. 🤖 INSERIR MEDIÇÃO COM ANÁLISE IA
         0.  DISCONNECT DB\n """
         print(interface)
 
         choice = int(input("Opção: "))
-        if choice < 0 or choice > 15:
+        if choice < 0 or choice > 18:
             print("Erro tente novamente!")
             continue
 
@@ -928,34 +952,52 @@ try:
         if choice == 5:
             delete_test(con)
 
+        # CONSULTA 01
         if choice == 6:
-            consulta1(con)
+            rows = consulta1(con)
+            exibir_tabela1(rows)
 
         if choice == 7:
-            consulta2(con)
+            rows = consulta1(con)
+            exibir_graficos1(rows)
 
+        # CONSULTA 02
         if choice == 8:
-            consulta3(con)
+            rows = consulta2(con)
+            exibir_tabela2(rows)
 
         if choice == 9:
-            consulta_extra(con)
+            rows = consulta2(con)
+            exibir_graficos2(rows)
 
+        # CONSULTA 03
         if choice == 10:
-            show_table(con)
+            rows = consulta3(con)
+            exibir_tabela3(rows)
 
         if choice == 11:
-            insert_value(con)
+            rows = consulta3(con)
+            exibir_graficos3(rows)
 
         if choice == 12:
-            update_value(con)
+            consulta_extra(con)
 
         if choice == 13:
-            delete_value(con)
+            show_table(con)
 
         if choice == 14:
-            drop_all_tables(con)
+            insert_value(con)
 
         if choice == 15:
+            update_value(con)
+
+        if choice == 16:
+            delete_value(con)
+
+        if choice == 17:
+            drop_all_tables(con)
+
+        if choice == 18:
             inserir_medicao_com_ia(con)
 
     con.close()
